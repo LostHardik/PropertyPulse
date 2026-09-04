@@ -1,0 +1,18 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {businessDate,isDate,moneyToPaise,overlap,paymentStatus} from '../server/domain.js';
+import {buildSeed} from '../scripts/seed-data.js';
+import {parseRecord} from '../server/models.js';
+import {excel,pdf} from '../server/exports.js';
+import ExcelJS from 'exceljs';
+import {marketSnapshot} from '../data/nhb-residex-march-2026.js';
+test('currency is exact and malformed amounts are rejected',()=>{assert.equal(moneyToPaise('123.01'),12301);assert.equal(moneyToPaise('10.5'),1050);for(const x of ['0','-1','1e3','1.001','',12])assert.throws(()=>moneyToPaise(x));});
+test('calendar dates validate leap years',()=>{assert.equal(isDate('2028-02-29'),true);for(const x of ['2026-02-29','2026-02-30','2026-13-01','abc'])assert.equal(isDate(x),false);});
+test('business dates respect the configured Indian time zone',()=>{assert.equal(businessDate(new Date('2026-09-04T20:00:00Z'),'Asia/Kolkata'),'2026-09-05');assert.equal(businessDate(new Date('2026-09-04T20:00:00Z'),'UTC'),'2026-09-04');});
+test('inclusive intervals reject shared boundary dates',()=>{const a={unit_id:1,start_date:'2026-01-01',end_date:'2026-06-30',status:'ended'};assert.equal(overlap(a,{...a,start_date:'2026-06-30',end_date:'2026-12-31',status:'active'}),true);assert.equal(overlap(a,{...a,start_date:'2026-07-01'}),false);assert.equal(overlap(a,{...a,status:'cancelled'}),false);});
+test('payment status distinguishes due today and historical receipts',()=>{assert.equal(paymentStatus('2026-09-04',100,0,'2026-09-04'),'pending');assert.equal(paymentStatus('2026-09-01',100,50,'2026-09-04'),'late');assert.equal(paymentStatus('2026-09-01',100,100,'2026-09-04'),'paid');});
+test('deterministic seed has 956 domain rows with real partial receipts',()=>{const s=buildSeed();assert.deepEqual(s,buildSeed());assert.equal(Object.values(s).reduce((n,r)=>n+r.length,0),956);assert.equal(s.charges.length,420);assert.equal(s.receipts.length,380);for(const a of s.leases)for(const b of s.leases)if(a.id<b.id)assert.equal(overlap(a,b),false);const receipts=s.receipts.filter(r=>r.charge_id===11);assert.equal(receipts.length,2);assert.equal(receipts.reduce((n,r)=>n+r.amount_paise,0),s.charges[10].amount_paise);});
+test('public NHB market snapshot is attributed and contains project cities',()=>{assert.match(marketSnapshot.source_url,/nhb\.org\.in/);assert.equal(marketSnapshot.quarter_end,'2026-03-31');assert.equal(marketSnapshot.rows.find(row=>row.city==='Pune').annual_change_pct,2.9);assert.equal(marketSnapshot.rows.find(row=>row.city==='Mumbai').annual_change_pct,4.5);});
+test('schemas reject mass assignment and normalize receipt identity',()=>{assert.throws(()=>parseRecord('tenants',{name:'Test',email:'a@example.com',phone:'1234567',role:'admin'}));const r=parseRecord('receipts',{charge_id:1,amount_paise:100,paid_date:'2026-01-01',reference:' abc ',method:'UPI'});assert.equal(r.reference,'ABC');assert.throws(()=>parseRecord('leases',{tenant_id:1,unit_id:1,start_date:'2026-12-01',end_date:'2026-01-01',monthly_rent_paise:100,status:'active'}));});
+test('Excel export stores formula-like values as text',async()=>{const b=await excel([{tenant:'=1+1',amount_paise:12300}],'Rent roll','2026-09-04');const w=new ExcelJS.Workbook();await w.xlsx.load(b);assert.equal(w.worksheets[0].getCell('A4').value,'=1+1');assert.equal(w.worksheets[0].getCell('B4').value,12300);});
+test('PDF export produces a real document for empty and populated reports',async()=>{for(const rows of [[],[{unit:'A-1',amount_paise:10000}]]){const b=await pdf(rows,'Rent roll','2026-09-04');assert.equal(b.subarray(0,4).toString(),'%PDF');assert.ok(b.length>1000);}});

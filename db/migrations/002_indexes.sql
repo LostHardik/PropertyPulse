@@ -1,0 +1,15 @@
+CREATE INDEX ix_units_property ON dbo.Units(property_id,available_from);
+CREATE INDEX ix_leases_unit_dates ON dbo.Leases(unit_id,start_date,end_date) INCLUDE(tenant_id,status,monthly_rent_paise);
+CREATE INDEX ix_leases_tenant ON dbo.Leases(tenant_id);
+CREATE INDEX ix_leases_status_end ON dbo.Leases(status,end_date);
+CREATE INDEX ix_charges_due ON dbo.RentCharges(due_date,lease_id) INCLUDE(amount_paise);
+CREATE INDEX ix_receipts_charge_date ON dbo.PaymentReceipts(charge_id,paid_date) INCLUDE(amount_paise);
+CREATE INDEX ix_receipts_paid_date ON dbo.PaymentReceipts(paid_date) INCLUDE(amount_paise,charge_id);
+CREATE INDEX ix_maintenance_unit ON dbo.MaintenanceRequests(unit_id,status,resolved_date) INCLUDE(created_date);
+CREATE INDEX ix_maintenance_tenant ON dbo.MaintenanceRequests(tenant_id);
+CREATE INDEX ix_tickets_status ON dbo.SupportTickets(status,created_date);
+CREATE INDEX ix_tickets_raised ON dbo.SupportTickets(raised_by);
+CREATE INDEX ix_tickets_related ON dbo.SupportTickets(related_table,related_id);
+CREATE INDEX ix_audit_entity ON dbo.AuditLog(entity,entity_id,created_date);
+CREATE INDEX ix_audit_actor ON dbo.AuditLog(actor_id);
+CREATE INDEX ix_audit_ticket ON dbo.AuditLog(ticket_id);

@@ -1,0 +1,27 @@
+import test,{before,after} from 'node:test';
+import assert from 'node:assert/strict';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import {createApp} from '../server/app.js';
+const secret='test-only-secret-with-more-than-thirty-two-characters';
+let server,base,adminToken,viewerToken,writeCount=0;
+const users=[{id:1,name:'Admin',email:'admin@example.com',role:'admin',active:true},{id:2,name:'Viewer',email:'viewer@example.com',role:'viewer',active:true}];
+const repo={userByEmail:async email=>users.find(u=>u.email===email),userByRole:async role=>users.find(u=>u.role===role&&u.active),userById:async id=>users.find(u=>u.id===id),
+ kpis:async()=>({occupied_units:32,total_units:40}),marketBenchmarks:async()=>({publisher:'National Housing Bank',rows:[{city:'Pune',annual_change_pct:2.9}]}),report:async()=>[{unit:'A-1',amount_paise:10000}],
+ list:async()=>({items:[],total:0}),get:async()=>({id:1,name:'A'}),auditList:async()=>[],
+ create:async(e,d)=>{writeCount++;return {id:1,...d}},update:async(e,id,d)=>{writeCount++;return{id,...d}},remove:async()=>{writeCount++;return{ok:true}},investigate:async()=>({record:{id:1}}),resolve:async()=>({status:'resolved'})};
+before(async()=>{for(const u of users)u.password_hash=await bcrypt.hash('TestPassword123!',4);server=createApp(repo,{secret,staticFiles:false,logging:false,demoMode:true}).listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));base=`http://127.0.0.1:${server.address().port}`;for(const u of users){const r=await fetch(base+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:u.email,password:'TestPassword123!'})});assert.equal(r.status,200);const {token}=await r.json();if(u.role==='admin')adminToken=token;else viewerToken=token;}});
+after(()=>new Promise(r=>server.close(r)));
+function call(path,{token,body,method='GET'}={}){return fetch(base+'/api'+path,{method,headers:{...(token?{Authorization:'Bearer '+token}:{}),...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});}
+test('anonymous requests cannot read records or reports',async()=>{for(const path of ['/entities/units','/reports/rent-roll','/kpis'])assert.equal((await call(path)).status,401);});
+test('demo buttons create valid administrator and viewer sessions',async()=>{for(const role of ['admin','viewer']){const r=await call('/auth/demo',{method:'POST',body:{role}});assert.equal(r.status,200);const body=await r.json();assert.equal(body.user.role,role);assert.equal(jwt.verify(body.token,secret,{issuer:'propertypulse',audience:'propertypulse-web'}).sub,String(body.user.id));}});
+test('authenticated users can read attributed public market data',async()=>{const r=await call('/market-benchmarks',{token:viewerToken});assert.equal(r.status,200);const body=await r.json();assert.equal(body.publisher,'National Housing Bank');assert.equal(body.rows[0].city,'Pune');});
+test('viewer reads all reports and exports',async()=>{for(const path of ['/reports/occupancy','/entities/units','/kpis','/reports/rent-roll/export?format=xlsx','/reports/rent-roll/export?format=pdf'])assert.equal((await call(path,{token:viewerToken})).status,200);});
+test('viewer cannot create, update, delete, investigate, resolve or read audit',async()=>{const n=writeCount;for(const [path,method] of [['/entities/units','POST'],['/entities/units/1','PATCH'],['/entities/units/1','DELETE'],['/tickets/1/investigate','POST'],['/tickets/1/resolve','POST'],['/audit','GET']])assert.equal((await call(path,{token:viewerToken,method,body:method==='GET'?undefined:{}})).status,403);assert.equal(writeCount,n);});
+test('admin can create valid data',async()=>{const r=await call('/entities/tenants',{token:adminToken,method:'POST',body:{name:'Test Tenant',email:'test@example.com',phone:'9000000000'}});assert.equal(r.status,201);});
+test('invalid and mass-assigned input never reaches persistence',async()=>{const n=writeCount;for(const body of [{name:'Test',email:'wrong',phone:'1'},{name:'Test',email:'x@example.com',phone:'1',role:'admin'}])assert.equal((await call('/entities/tenants',{token:adminToken,method:'POST',body})).status,400);assert.equal(writeCount,n);});
+test('expired and wrong-audience JWTs are rejected',async()=>{for(const options of [{expiresIn:-1,audience:'propertypulse-web'},{expiresIn:100,audience:'other'}]){const token=jwt.sign({sub:'1'},secret,{issuer:'propertypulse',...options});assert.equal((await call('/kpis',{token})).status,401);}});
+test('database role change takes effect without waiting for JWT expiry',async()=>{users[0].role='viewer';try{assert.equal((await call('/tickets/1/investigate',{token:adminToken,method:'POST',body:{}})).status,403);}finally{users[0].role='admin';}});
+test('invalid as-of dates and unbounded page sizes are rejected',async()=>{for(const path of ['/reports/overdue?asOf=2026-02-30','/entities/units?limit=999999','/entities/units?page=-1'])assert.equal((await call(path,{token:adminToken})).status,400);});
+test('resolution needs meaningful notes',async()=>{assert.equal((await call('/tickets/1/resolve',{token:adminToken,method:'POST',body:{resolution_notes:''}})).status,400);});
+test('unknown accounts and wrong passwords have generic login errors',async()=>{for(const email of ['none@example.com','admin@example.com']){const r=await call('/auth/login',{method:'POST',body:{email,password:'incorrect'}});assert.equal(r.status,401);assert.equal((await r.json()).error,'Invalid email or password');}});
