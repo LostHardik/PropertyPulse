@@ -2,6 +2,9 @@
 
 A SQL-focused property management and application-support portfolio project inspired by property-management workflows. The dashboard combines an attributed National Housing Bank market snapshot with privacy-safe generated operations. Independent educational software, not a Yardi product or Voyager replica.
 
+**Live demo:** https://property-pulse-wine.vercel.app  
+**Source:** https://github.com/LostHardik/PropertyPulse
+
 **Stack:** Node.js 22, Express, Microsoft SQL Server 2022, React, Recharts. All six SQL-backed reporting queries are handwritten T-SQL with no ORM or SQLite replacement. The Vercel portfolio adapter uses the same API with resettable generated operations so public visitors cannot damage a persistent database.
 
 ## What is included
@@ -23,11 +26,11 @@ Property names, units, rents, tenants, leases, charges, receipts, maintenance re
 
 ## Deploy the safe Vercel portfolio demo
 
-The Vercel entry point (`index.js`) intentionally uses a resettable in-memory repository. It exposes the complete UI, both roles, reports, exports and support workflow without connecting public visitors to the SQL database. Changes may reset between requests or deployments and must not be treated as persistent records. The full SQL Server implementation continues to run through `server/index.js`.
+The Vercel API entry point (`api/[...path].js`) uses the resettable in-memory repository exported by `index.js`. It exposes the complete UI, both roles, reports, exports and support workflow without connecting public visitors to the SQL database. Changes may reset between requests or deployments and must not be treated as persistent records. The full SQL Server implementation continues to run through `server/index.js`.
 
 1. Push this folder to a GitHub repository and import it at [vercel.com/new](https://vercel.com/new).
 2. Add a production environment variable named `JWT_SECRET` containing a random value of at least 32 characters.
-3. Keep the included build and install settings from `vercel.json`; Vercel builds the Vite client into `public/` and detects the exported Express application.
+3. Keep the included build, output and API rewrite settings from `vercel.json`; Vercel builds the Vite client into `public/` and routes `/api/*` to the exported Express application.
 4. Deploy, then verify `/api/health`, both role buttons, the NHB market panel, reports and exports.
 
 Use Node.js 22.x. No database credential is required for the public Vercel demo. For a persistent SQL-backed deployment, use `server/index.js` on a long-running Node host with Azure SQL or SQL Server and keep `DEMO_MODE=false` unless the database contains disposable sample data.
@@ -207,4 +210,4 @@ Suggested resume wording **after running the SQL tests and understanding the imp
 
 Docker Compose here is a local development setup: localhost-bound ports, self-signed certificate trust and a privileged bootstrap account. The public Vercel adapter is deliberately resettable and is not a persistent system of record. A persistent deployment needs a supported SQL Server service, a long-running Node/container host, HTTPS, trusted database TLS, least-privilege runtime credentials, secret management and backups. SQL Server Developer licensing must be appropriate to the use. Never publish the database port or use `sa` as a production app account. Financial receipt deletion is included for CRUD learning; production accounting normally uses controlled reversals and immutable records.
 
-The source can be committed to your own GitHub repository after excluding `.env`; GitHub repository storage alone does not run this Express/SQL Server system. This package is not a public deployment.
+The public repository excludes `.env` and contains placeholders only in `.env.example`. The live Vercel demo uses the resettable adapter and does not run the persistent SQL Server system.
