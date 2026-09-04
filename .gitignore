@@ -1,0 +1,9 @@
+node_modules/
+dist/
+public/
+.env
+.env.*
+!.env.example
+coverage/
+benchmark-output/
+*.log

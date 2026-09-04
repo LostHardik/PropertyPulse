@@ -1,0 +1,7 @@
+{
+  "name":"propertypulse","version":"1.0.0","private":true,"type":"module",
+  "engines":{"node":"22.x"},
+  "scripts":{"dev":"node --env-file=.env server/index.js","dev:web":"vite --host 127.0.0.1","build":"vite build","start":"node server/index.js","db:migrate":"node --env-file=.env scripts/migrate.js","db:seed":"node --env-file=.env scripts/seed.js","test":"node --test tests/unit.test.js tests/api.test.js tests/vercel-demo.test.js","test:sql":"node --env-file=.env --test --test-concurrency=1 tests/sql.test.js","benchmark":"node --env-file=.env scripts/benchmark.js"},
+  "dependencies":{"express":"^4.21.2","mssql":"^11.0.1","jsonwebtoken":"^9.0.2","bcryptjs":"^3.0.2","helmet":"^8.1.0","express-rate-limit":"^7.5.0","zod":"^3.25.76","exceljs":"^4.4.0","pdfkit":"^0.17.1","react":"^19.2.0","react-dom":"^19.2.0","recharts":"^3.8.0","lucide-react":"^0.468.0"},
+  "devDependencies":{"vite":"^6.3.5","@vitejs/plugin-react":"^4.5.2"}
+}
